@@ -3,7 +3,7 @@
 #include "PubSubClient.h"
 #include "Adafruit_NeoPixel.h"
 #include <SPI.h>   
-#define modes 2
+
 /////////////////// SETTINGS /////////////////////////////////////////////////////////
 
 WiFiClient espClient;
@@ -28,6 +28,7 @@ bool led_on = false;// Переменная состаяния светодио�
 //NeoPixel обозначение пинов
 const int LED_PIN = 2;
 const int LED_COUNT = 140;
+
 //NeoPixel начальные настройки
 Adafruit_NeoPixel neoPixel = Adafruit_NeoPixel(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 int led_brig = 90;
@@ -37,12 +38,28 @@ int lamp_r = 250 ;
 int lamp_g = 250 ;
 int lamp_b = 250 ;
 
+
 //Настройки сенсора
 const int bt1 = 32;        // сенсор пин
 uint8_t BtF1 = 1;    // Фильтр от ложных срабатываний (по умолчанию не касаемся)
 uint8_t StBt = 0;   // переменная для хранения статуса кнопки
+int value_SredN = 50;
+const int NUM_READ = 100;  // количество усреднений для средних арифм. фильтров
+int midArifm() {
+  long sum = 0;                       // локальная переменная sum
+  for (int i = 0; i < NUM_READ; i++)  // согласно количеству усреднений
+    sum += touchRead(bt1);  
+                  // суммируем значения с любого датчика в переменную sum
+  return ((float)sum / NUM_READ);
+  }
+
+int value_Touch;
 const bool retain_flag = false;
 
+//
+unsigned int timer = 0;
+bool flag = false;
+bool shab = false;
 
 TaskHandle_t Task1;
 /////////////////////// VOID`S ///////////////////////////////////
@@ -153,16 +170,45 @@ void reconnect() {
   }
 }
 
+// Офлайн контроль на втором ядре
 void Task1code( void * pvParameters ) {
-
+  value_Touch = midArifm() - 5; // установка автоматической границы(калибровки сеносра) при включении
+  
   Serial.print("Task1 running on core ");
   Serial.println(xPortGetCoreID());
-  
+
   for(;;){
     delay(10);
-  if ((touchRead(bt1)) <50) { 
-      Serial.println(touchRead(bt1));   // Если прикоснулись к сенсорной кнопке (повысим чувсвительность)
-  if (bitRead(BtF1, 7)) {
+    
+/*  switch (shab)
+    {
+      case true:
+        lamp_r = 250 ;
+        lamp_g = 250 ;
+        lamp_b = 250 ;
+        updateStatePins;
+      break;
+      
+      case false:
+        lamp_r = 250 ;
+        lamp_g = 250 ;
+        lamp_b = 0 ;
+        updateStatePins;
+      break;
+    }
+*/
+
+
+  if ((touchRead(bt1)) < value_Touch) { 
+      Serial.print("Значение при прикосновении: ");
+      Serial.println(midArifm());   // Если прикоснулись к сенсорной кнопке (повысим чувсвительность)
+      Serial.print("Автоматическая граница: ");
+      Serial.println(value_Touch);
+      Serial.print("Значение окр.среды: ");
+      Serial.println(touchRead(bt1));
+      
+   
+if (bitRead(BtF1, 7)) {
       bitSet(StBt, 0);
       } else BtF1 <<= 1;
     }
@@ -171,35 +217,38 @@ void Task1code( void * pvParameters ) {
         bitClear(StBt, 0); bitClear(StBt, 1);
         } else BtF1 >>= 1;       
   } 
-  if (bitRead(StBt, 0) && !bitRead(StBt, 1)) {  // Обрабатываем только одно прикосновение
-
+  if (bitRead(StBt, 0) && !bitRead(StBt, 1)) { // Обрабатываем только одно прикосновение
     bitSet(StBt, 1);        // пока не отпустят кнопку - больше не реагируем
-    led_on = !led_on;  //изменение значения ленты
-    
-    if(led_on){
-      setAll(lamp_r, lamp_g, lamp_b);
-    }else{
-      setAll(0, 0, 0);
-    }
 
-      switch (modes) {
-    case 0: 
-       lamp_r = 255 ;
-       lamp_g = 248 ;
-       lamp_b = 220 ;
-      break;
-    case 1: 
-       lamp_r = 250 ;
-       lamp_g = 250 ;
-       lamp_b = 250 ;
-      break;
-  }
+    /////////////////////// OFFline //////////////////////////////////////////////////
+    
+/*    timer = millis();
+      while(millis()-timer < 3000){
+        if (((touchRead(bt1)) > value_Touch)){
+          flag = false;
+          Serial.println("1000000000000");
+          break;
+          }
+        flag = true;
+        }
+      if (flag){shab = !shab; updateStatePins;}
+      else {
+        flag = false; 
+        led_on = !led_on;
+        }
+*/
+    led_on = !led_on;
+
+    if(led_on){setAll(lamp_r, lamp_g, lamp_b);}
+    else{setAll(0, 0, 0);}
 
     client.publish(led_send_topic, String(led_on).c_str(), retain_flag); //изменение значения перменной на топике
     updateStatePins; 
-    }}
-  delay(100);
+
+  }
+ }
 }
+
 
 
 
@@ -223,6 +272,7 @@ void setup() {
   setup_wifi();
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
+
 
 }
 void loop() {
