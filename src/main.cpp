@@ -10,14 +10,14 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 // Wi-Fi
-const char* ssid = "pressF";
-const char* password = "010720291";
+const char* ssid = "**********";
+const char* password = "*********";
 
 // MQTT
-const char* mqtt_server = "m5.wqtt.ru";
-const int mqtt_port = 8374;
-const char* mqtt_user = "u_XDXG92";
-const char* mqtt_password = "KbBfNyHK";
+const char* mqtt_server = "**********";
+const int mqtt_port = ****;
+const char* mqtt_user = "***********";
+const char* mqtt_password = "*********";
 
 // Topic
 const String led_topic = "/led";//"Прием" яркость -"/led/brig", цвет - "/led/color"
